@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Segredos / ambiente local
+.env
+.env.*
+!.env.example
+
+# Go
+/server/bin/
+/server/api
+*.test
+*.out
+coverage.*
+
+# Godot
+.godot/
+/client/build/
+*.import.tmp
+export_credentials.cfg
+
+# Editores
+.vscode/
+.idea/
+*.swp

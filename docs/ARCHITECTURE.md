@@ -66,7 +66,9 @@ server/
   cmd/api/main.go         # wiring, sinal, graceful shutdown
   internal/
     config/               # env vars → struct validada
-    http/                 # rotas, middlewares (timeouts, request id, limites de tamanho)
+    httpapi/              # rotas, middlewares (timeouts, request id, limites de tamanho);
+                          # "httpapi" e não "http" para não colidir com net/http
+    logging/              # logger slog (JSON/text)
     auth/ users/ profiles/ ranking/
     lobby/ matchmaking/
     game/rules/           # mesmas regras do cliente (fonte da verdade)

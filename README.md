@@ -11,7 +11,8 @@ Tudo gratuito/open source. Nenhum serviço pago é dependência.
 
 ## Estado atual
 
-Fase 1 (Fundação) em andamento — ver `docs/ROADMAP_DIARIO.md` para o progresso dia a dia
+Fase 1 (Fundação) em andamento. Backend Go mínimo pronto (`server/`: config por env, logs slog,
+`GET /healthz`, `GET /readyz`, timeouts e graceful shutdown). Ver `docs/ROADMAP_DIARIO.md` para o progresso dia a dia
 e `docs/ROADMAP.md` para a visão por fases.
 
 ## Estrutura (alvo)
@@ -52,3 +53,12 @@ source <(scripts/setup-dev-vm.sh env)
 ```
 
 Em máquina própria, instale Go ≥ 1.27, Godot 4.7.x stable, Docker e PostgreSQL ≥ 16 normalmente.
+
+### Backend
+
+```bash
+cd server
+go run ./cmd/api                     # escuta em :8080 (BG_HTTP_ADDR)
+curl localhost:8080/healthz
+go vet ./... && go test ./...        # CC=gcc CGO_ENABLED=1 go test -race ./... para o detector de corrida
+```

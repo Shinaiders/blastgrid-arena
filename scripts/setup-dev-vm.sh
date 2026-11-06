@@ -39,6 +39,8 @@ print_env() {
   # proxy.golang.org e sum.golang.org bloqueados na VM: módulos vêm direto do VCS.
   # go.sum continua fixando os hashes; revalidar com sum.golang.org fora da VM.
   echo "export GOPROXY=direct GOSUMDB=off"
+  # O Go do conda-forge vem com CC=/dev/null; o gcc do sistema habilita go test -race.
+  echo "export CC=gcc"
 }
 
 if [[ "${1:-}" == "env" ]]; then print_env; exit 0; fi
