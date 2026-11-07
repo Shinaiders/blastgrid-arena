@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -33,6 +35,14 @@ type Config struct {
 	WriteTimeout      time.Duration
 	IdleTimeout       time.Duration
 	ShutdownTimeout   time.Duration
+
+	// Banco (docs/DATABASE.md §7). DatabaseURL vazio só é aceito em dev:
+	// o servidor sobe sem banco e /readyz não inclui o check "database".
+	DatabaseURL      string
+	DBMaxConns       int32
+	DBMinConns       int32
+	DBConnectTimeout time.Duration
+	MigrateOnStart   bool
 }
 
 // Load lê a configuração usando getenv (normalmente os.Getenv; injetável em testes).
@@ -62,6 +72,31 @@ func Load(getenv func(string) string) (Config, error) {
 		return d
 	}
 
+	i32 := func(key string, def, lo, hi int32) int32 {
+		raw := str(key, "")
+		if raw == "" {
+			return def
+		}
+		n, err := strconv.ParseInt(raw, 10, 32)
+		if err != nil || int32(n) < lo || int32(n) > hi {
+			errs = append(errs, fmt.Errorf("%s: esperado inteiro entre %d e %d, recebido %q", key, lo, hi, raw))
+			return def
+		}
+		return int32(n)
+	}
+	boolean := func(key string, def bool) bool {
+		raw := str(key, "")
+		if raw == "" {
+			return def
+		}
+		b, err := strconv.ParseBool(raw)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: esperado true|false, recebido %q", key, raw))
+			return def
+		}
+		return b
+	}
+
 	cfg := Config{
 		Env:               Env(strings.ToLower(str("BG_ENV", string(EnvDev)))),
 		HTTPAddr:          str("BG_HTTP_ADDR", ":8080"),
@@ -71,6 +106,11 @@ func Load(getenv func(string) string) (Config, error) {
 		WriteTimeout:      dur("BG_WRITE_TIMEOUT", 10*time.Second),
 		IdleTimeout:       dur("BG_IDLE_TIMEOUT", 60*time.Second),
 		ShutdownTimeout:   dur("BG_SHUTDOWN_TIMEOUT", 30*time.Second),
+		DatabaseURL:       str("BG_DATABASE_URL", ""),
+		DBMaxConns:        i32("BG_DB_MAX_CONNS", 10, 1, 100),
+		DBMinConns:        i32("BG_DB_MIN_CONNS", 1, 0, 100),
+		DBConnectTimeout:  dur("BG_DB_CONNECT_TIMEOUT", 5*time.Second),
+		MigrateOnStart:    boolean("BG_MIGRATE_ON_START", false),
 	}
 
 	if cfg.Env != EnvDev && cfg.Env != EnvProd {
@@ -102,6 +142,27 @@ func Load(getenv func(string) string) (Config, error) {
 
 	if !strings.Contains(cfg.HTTPAddr, ":") {
 		errs = append(errs, fmt.Errorf("BG_HTTP_ADDR: esperado host:porta ou :porta, recebido %q", cfg.HTTPAddr))
+	}
+
+	if cfg.DBMinConns > cfg.DBMaxConns {
+		errs = append(errs, fmt.Errorf("BG_DB_MIN_CONNS (%d) não pode ser maior que BG_DB_MAX_CONNS (%d)", cfg.DBMinConns, cfg.DBMaxConns))
+	}
+	if cfg.DatabaseURL != "" {
+		// Não ecoar a URL no erro: ela contém a senha.
+		if u, err := url.Parse(cfg.DatabaseURL); err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.Host == "" {
+			errs = append(errs, errors.New("BG_DATABASE_URL: esperado postgres://usuario:senha@host:porta/banco"))
+		}
+	}
+	if cfg.Env == EnvProd {
+		if cfg.DatabaseURL == "" {
+			errs = append(errs, errors.New("BG_DATABASE_URL: obrigatória em prod"))
+		}
+		if cfg.MigrateOnStart {
+			errs = append(errs, errors.New("BG_MIGRATE_ON_START: não permitido em prod (use \"api migrate up\")"))
+		}
+	}
+	if cfg.MigrateOnStart && cfg.DatabaseURL == "" {
+		errs = append(errs, errors.New("BG_MIGRATE_ON_START: exige BG_DATABASE_URL"))
 	}
 
 	if err := errors.Join(errs...); err != nil {

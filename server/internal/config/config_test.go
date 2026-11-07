@@ -34,6 +34,9 @@ func TestLoadOverrides(t *testing.T) {
 		"BG_LOG_FORMAT":       "json",
 		"BG_SHUTDOWN_TIMEOUT": "2s",
 		"BG_IDLE_TIMEOUT":     " 90s ",
+		"BG_DATABASE_URL":     "postgres://bg:segredo@db:5432/blastgrid?sslmode=disable",
+		"BG_DB_MAX_CONNS":     "20",
+		"BG_DB_MIN_CONNS":     "2",
 	}))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -43,6 +46,48 @@ func TestLoadOverrides(t *testing.T) {
 	}
 	if cfg.ShutdownTimeout != 2*time.Second || cfg.IdleTimeout != 90*time.Second {
 		t.Errorf("durações não aplicadas: %+v", cfg)
+	}
+	if cfg.DBMaxConns != 20 || cfg.DBMinConns != 2 || cfg.DBConnectTimeout != 5*time.Second || cfg.MigrateOnStart {
+		t.Errorf("config de banco inesperada: %+v", cfg)
+	}
+}
+
+func TestDatabaseRules(t *testing.T) {
+	cases := []struct {
+		name    string
+		env     map[string]string
+		wantErr string // "" = deve passar
+	}{
+		{"dev sem banco", nil, ""},
+		{"prod sem banco", map[string]string{"BG_ENV": "prod"}, "BG_DATABASE_URL: obrigatória"},
+		{"migrate on start em prod", map[string]string{"BG_ENV": "prod", "BG_DATABASE_URL": "postgres://a:b@h/d", "BG_MIGRATE_ON_START": "true"}, "BG_MIGRATE_ON_START"},
+		{"migrate on start sem url", map[string]string{"BG_MIGRATE_ON_START": "true"}, "exige BG_DATABASE_URL"},
+		{"migrate on start dev", map[string]string{"BG_DATABASE_URL": "postgres://a:b@h/d", "BG_MIGRATE_ON_START": "1"}, ""},
+		{"min > max", map[string]string{"BG_DB_MAX_CONNS": "2", "BG_DB_MIN_CONNS": "5"}, "BG_DB_MIN_CONNS"},
+		{"max fora da faixa", map[string]string{"BG_DB_MAX_CONNS": "0"}, "BG_DB_MAX_CONNS"},
+		{"bool inválido", map[string]string{"BG_MIGRATE_ON_START": "talvez"}, "BG_MIGRATE_ON_START"},
+		{"esquema errado", map[string]string{"BG_DATABASE_URL": "mysql://a:b@h/d"}, "BG_DATABASE_URL"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(envMap(tc.env))
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("esperava sucesso, veio %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("esperava erro com %q, veio %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestDatabaseURLNotLeakedInError(t *testing.T) {
+	_, err := Load(envMap(map[string]string{"BG_DATABASE_URL": "mysql://u:senha-super-secreta@h/d"}))
+	if err == nil || strings.Contains(err.Error(), "senha-super-secreta") {
+		t.Fatalf("erro não deve conter a senha: %v", err)
 	}
 }
 

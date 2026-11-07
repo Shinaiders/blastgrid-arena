@@ -1,7 +1,7 @@
 # BlastGrid Arena — Banco de dados
 
-Versão 1.0 (2026-11-06). Status: **modelo planejado**; as migrations são criadas no Dia 04
-(`server/migrations/`). Decisões: ARCHITECTURE D-06 (PostgreSQL ≥ 16 + pgx/pgxpool), D-07 (migrations
+Versão 1.1 (2026-11-06). Status: **implementado** em `server/migrations/0001_init` (Dia 04), com runner
+em `server/internal/persistence`. Decisões: ARCHITECTURE D-06 (PostgreSQL ≥ 16 + pgx/pgxpool), D-07 (migrations
 SQL próprias), D-16 (estado de partida só em memória).
 
 ## 1. Princípios
@@ -109,8 +109,7 @@ coincidem com os de conquistas da Steam na Fase 6.)
 ### Planejadas para a Fase 3 (fora do Dia 04)
 - `auth_sessions(id, user_id, refresh_token_hash bytea, user_agent, platform, created_at, expires_at,
   revoked_at)` — tokens de renovação guardados só como hash (SHA-256), rotação a cada uso.
-- `schema_migrations(version bigint PK, name text, applied_at timestamptz)` — criada pelo runner (D-07),
-  já no Dia 04.
+(`schema_migrations(version bigint PK, name text, applied_at timestamptz)` já existe: é criada pelo runner.)
 
 ## 4. Índices
 
@@ -143,7 +142,21 @@ Posição de um jogador no ranking: `COUNT(*) WHERE season=$1 AND mode=$2 AND ra
   instâncias não migrem ao mesmo tempo.
 - Execução: subcomando `api migrate up|down N|status` e, opcionalmente, na inicialização com
   `BG_MIGRATE_ON_START=true` (dev).
+- No compose, o serviço `migrate` (mesma imagem, `command: migrate up`) roda antes da API.
+- O runner recusa operar se o banco tiver uma versão que o binário não conhece (binário desatualizado)
+  e exige versões contíguas a partir de 0001 com par up/down.
 - Toda migration precisa de `down` funcional; o teste de integração aplica tudo, reverte tudo e aplica de novo.
+- Testes de integração: `BG_TEST_DATABASE_URL` aponta para um banco descartável; cada teste cria um schema
+  próprio (`internal/persistence/pgtest`) e o remove ao final. Sem a variável, os testes de banco são pulados.
+
+### 0001_init — notas de implementação
+- Seed de catálogo: 4 personagens `sparky_a..d` (Volt, Ember, Moss, Frost) com stats iguais (200
+  militiles/tick = 4,0 tiles/s a 20 Hz, 1 bomba, alcance 2 — GDD §4–5), uma skin `*_default` cada e 3
+  conquistas iniciais.
+- `rankings.mode` aceita só modos ranqueados (`ffa`, `team`, `lms`); `matches.mode` aceita também `practice`.
+- `match_players.slot` 0–7 e `place` 1–8 (até 8 jogadores).
+- Índice de ranking `rankings_leaderboard_idx (season, mode, rating DESC, user_id DESC)`: o teste
+  `TestLeaderboardUsesIndex` confirma via `EXPLAIN` que o top N/keyset usa o índice sem `Sort`.
 - Migrations já publicadas nunca são editadas — corrige-se com uma nova.
 
 ## 7. Conexão (pgxpool)

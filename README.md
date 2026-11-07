@@ -11,8 +11,9 @@ Tudo gratuito/open source. Nenhum serviço pago é dependência.
 
 ## Estado atual
 
-Fase 1 (Fundação) em andamento. Backend Go mínimo pronto (`server/`: config por env, logs slog,
-`GET /healthz`, `GET /readyz`, timeouts e graceful shutdown). Ver `docs/ROADMAP_DIARIO.md` para o progresso dia a dia
+Fase 1 (Fundação) em andamento. Backend Go com config por env, logs slog, `GET /healthz`, `GET /readyz`
+(checa o PostgreSQL), timeouts, graceful shutdown, pool pgx, migrations SQL versionadas (`server/migrations`)
+e Docker Compose (db + migrate + api). Ver `docs/ROADMAP_DIARIO.md` para o progresso dia a dia
 e `docs/ROADMAP.md` para a visão por fases.
 
 ## Estrutura (alvo)
@@ -43,13 +44,14 @@ Diretórios só são criados quando recebem código real (regra do briefing: nad
 
 ## Ambiente de desenvolvimento
 
-Versões de referência (verificadas em 2026-11-05): Go 1.27.3, Godot 4.7.2-stable, Git 2.34+.
+Versões de referência (verificadas em 2026-11-05/06): Go 1.27.3, Godot 4.7.2-stable, PostgreSQL 16, pgx v5.12.0, Git 2.34+.
 
 Na VM Linux usada pela automação diária (sem root):
 
 ```bash
-scripts/setup-dev-vm.sh            # instala Go e Godot em ~/tools
+scripts/setup-dev-vm.sh            # instala Go, Godot e PostgreSQL 16 em ~/tools
 source <(scripts/setup-dev-vm.sh env)
+scripts/setup-dev-vm.sh pg-start   # sobe o PostgreSQL local (127.0.0.1:55432) na mesma chamada dos testes
 ```
 
 Em máquina própria, instale Go ≥ 1.27, Godot 4.7.x stable, Docker e PostgreSQL ≥ 16 normalmente.
@@ -58,7 +60,15 @@ Em máquina própria, instale Go ≥ 1.27, Godot 4.7.x stable, Docker e PostgreS
 
 ```bash
 cd server
-go run ./cmd/api                     # escuta em :8080 (BG_HTTP_ADDR)
+go run ./cmd/api                     # escuta em :8080 (BG_HTTP_ADDR); sem BG_DATABASE_URL sobe sem banco (só dev)
 curl localhost:8080/healthz
 go vet ./... && go test ./...        # CC=gcc CGO_ENABLED=1 go test -race ./... para o detector de corrida
+# testes de integração com banco: defina BG_TEST_DATABASE_URL (senão são pulados)
+```
+
+### Docker
+
+```bash
+docker compose up --build            # PostgreSQL 16 → migrations → API em http://localhost:8080
+docker compose run --rm migrate      # reaplicar migrations; status: docker compose run --rm api migrate status
 ```

@@ -1,0 +1,9 @@
+# Só o necessário para compilar entra no contexto de build.
+**/.DS_Store
+**/*_test.go
+**/*.test
+**/*.out
+bin/
+api
+Dockerfile
+.dockerignore

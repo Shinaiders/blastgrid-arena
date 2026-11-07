@@ -1,7 +1,7 @@
 # BlastGrid Arena — Deploy
 
-Versão 1.0 (2026-11-06). Status: **plano**. `Dockerfile`, `docker-compose.yml` e `.env.example` são
-criados no Dia 04; o deploy de produção é da Fase 7. Nenhum serviço pago é dependência: as opções pagas
+Versão 1.1 (2026-11-06). Status: `server/Dockerfile`, `docker-compose.yml` e `.env.example` existem (Dia 04);
+o deploy de produção é da Fase 7. Nenhum serviço pago é dependência: as opções pagas
 aparecem marcadas e só serão adotadas com aprovação.
 
 ## 1. Artefatos
@@ -24,7 +24,8 @@ Prefixo `BG_`. Validadas na inicialização; valor inválido ⇒ o processo não
 | `BG_LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` |
 | `BG_LOG_FORMAT` | `json` | `json` \| `text` (text só para dev) |
 | `BG_DATABASE_URL` | — | DSN PostgreSQL |
-| `BG_DB_MAX_CONNS` / `BG_DB_MIN_CONNS` | `10` / `1` | pool pgx |
+| `BG_DB_MAX_CONNS` / `BG_DB_MIN_CONNS` | `10` / `1` | pool pgx (máx. 1–100; mín. ≤ máx.) |
+| `BG_DB_CONNECT_TIMEOUT` | `5s` | timeout de conexão e do ping inicial |
 | `BG_MIGRATE_ON_START` | `false` | aplica migrations ao subir (só dev) |
 | `BG_ALLOWED_ORIGINS` | `http://localhost:*` em dev | lista separada por vírgula para CORS e `OriginPatterns` do WS |
 | `BG_TICK_RATE` | `20` | 20–30 |
@@ -40,7 +41,7 @@ Segredos nunca vão para o repositório: `.env` está no `.gitignore`; `.env.exa
 
 | Rota | Significado | Uso |
 |---|---|---|
-| `GET /healthz` | processo vivo (não toca no banco) | liveness / `HEALTHCHECK` do Docker |
+| `GET /healthz` | processo vivo (não toca no banco) | liveness / `HEALTHCHECK` do Docker (`/api healthcheck`, pois a imagem distroless não tem curl) |
 | `GET /readyz` | pronto para tráfego: banco responde (`Ping` ≤ 1 s) e não está em shutdown | readiness / proxy |
 
 Durante o shutdown `/readyz` passa a responder 503 imediatamente, para o proxy parar de mandar tráfego novo.
@@ -48,11 +49,15 @@ Durante o shutdown `/readyz` passa a responder 503 imediatamente, para o proxy p
 ## 4. Ambiente de desenvolvimento
 
 ```
+cp .env.example .env             # opcional; os padrões do compose servem para dev
 docker compose up -d db          # PostgreSQL 16 com volume local
 cd server && go run ./cmd/api    # BG_DATABASE_URL apontando para localhost:5432
 # ou tudo em container:
-docker compose up --build
+docker compose up --build        # db → migrate (job único: api migrate up) → api :8080
+curl localhost:8080/readyz       # {"checks":[{"name":"database","ok":true}],"status":"ready"}
 ```
+
+Subcomandos do binário: `api` (servidor), `api migrate up|down [N]|status`, `api healthcheck`.
 
 No Mac: Docker Desktop (gratuito para uso pessoal/empresas pequenas — verificar a licença se houver uso
 comercial de maior porte), OrbStack (gratuito para uso pessoal) ou **Colima** (open source, sem restrição).

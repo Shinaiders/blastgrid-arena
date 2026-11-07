@@ -109,21 +109,22 @@ Ambiente da automação diária: VM Linux Ubuntu 22.04.5, **aarch64**, 4 vCPU, 3
 | Go | ausente → instalado em `~/tools` via conda-forge (`scripts/setup-dev-vm.sh`) | 1.27.3 linux/arm64 |
 | Godot | ausente → instalado em `~/tools` via GitHub Releases (SHA-512 conferido) | 4.7.2.stable.official.ed1daf0bf |
 | Docker / Compose | ausente; **não instalável** (sem root, Docker Hub bloqueado) | — |
-| PostgreSQL | ausente; sem apt (sem root) | — |
+| PostgreSQL | ausente; sem apt (sem root) → conda-forge via micromamba em `~/tools/pg` (Dia 04) | 16.15 |
 
 Incompatibilidades e mitigação:
 
 1. **VM efêmera** — ferramentas fora da pasta do projeto somem entre execuções. Mitigação:
    `scripts/setup-dev-vm.sh` idempotente, com hashes fixados; validado numa instalação limpa.
-2. **`proxy.golang.org` e `sum.golang.org` bloqueados** — módulos via `GOPROXY=direct`, `GOSUMDB=off`.
-   `go.sum` ainda fixa hashes; revalidar com `GOSUMDB` ligado numa máquina com rede aberta (pendência).
-3. **`gopkg.in` bloqueado** — `pgx/v5` puxa transitivamente `gopkg.in/yaml.v3` (via testify de
-   `pgservicefile`). A resolver no Dia 04 (ex.: `replace` apontando para o espelho no GitHub, ou baixar
-   em máquina com rede aberta e versionar só `go.sum`). `coder/websocket` baixa sem problema.
-4. **Docker indisponível na VM** — o Dia 04 valida `Dockerfile`/`docker-compose.yml` sintaticamente aqui
-   e a subida real deve ser feita no Mac (Docker Desktop/OrbStack/Colima, gratuitos para uso pessoal —
-   confirmar licença do Docker Desktop se uso comercial). Para testes de integração na VM, avaliar
-   PostgreSQL do conda-forge em espaço de usuário.
+2. **`proxy.golang.org` e `sum.golang.org` bloqueados** — módulos via GitHub (`GOPROXY=file://…,direct`,
+   `GOSUMDB=off`). O `go.sum` foi conferido contra o `go.sum` oficial do pgx v5.12.0 (24/24 iguais); o
+   `docker build` no Mac usa o proxy padrão com `GOSUMDB` ligado e revalida tudo (`go mod verify`).
+3. **`gopkg.in` e `golang.org/x` bloqueados** — resolvido no Dia 04 sem `replace` no `go.mod`:
+   `scripts/vm-gomirror.sh` monta um GOPROXY `file://` local a partir dos espelhos no GitHub, com zips que
+   reproduzem o hash `h1:` oficial. O `go.mod` do projeto fica idêntico ao de uma máquina com rede aberta.
+4. **Docker indisponível na VM** — a subida real do compose deve ser feita no Mac (Docker Desktop/
+   OrbStack/Colima, gratuitos para uso pessoal — confirmar licença do Docker Desktop se uso comercial).
+   Na VM, os testes de integração usam PostgreSQL 16 do conda-forge (`scripts/setup-dev-vm.sh pg-start`)
+   e o build da imagem é simulado com o mesmo comando `go build` do Dockerfile.
 5. **Export Web/desktop** exige export templates (`.tpz` do GitHub, grande) — baixar quando o export
    for validado (Dia 14); o Dia 05 valida apenas import headless e presets.
 6. **WebSocket no navegador** não permite cabeçalhos customizados — autenticação do WS por token na
