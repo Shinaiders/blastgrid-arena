@@ -11,10 +11,13 @@ Tudo gratuito/open source. Nenhum serviço pago é dependência.
 
 ## Estado atual
 
-Fase 1 (Fundação) em andamento. Backend Go com config por env, logs slog, `GET /healthz`, `GET /readyz`
-(checa o PostgreSQL), timeouts, graceful shutdown, pool pgx, migrations SQL versionadas (`server/migrations`)
-e Docker Compose (db + migrate + api). Ver `docs/ROADMAP_DIARIO.md` para o progresso dia a dia
-e `docs/ROADMAP.md` para a visão por fases.
+Todas as Fases 1 a 7 implementadas e validadas com testes automatizados em Go e no Godot 4 headless:
+- **Fase 1 (Fundação — Dias 01 a 05):** Backend Go (`internal/config`, `internal/logging`, `internal/httpapi`, `internal/persistence`), migrations PostgreSQL (`0001_init`, `0002_auth_sessions`), Docker Compose e projeto Godot 4 (`client/project.godot`, `export_presets.cfg`).
+- **Fase 2 (Protótipo jogável offline — Dias 06 a 14):** Simulação determinística em militiles e `xorshift32` (`client/scripts/rules/`), renderização procedural de Sparkies/caixotes/petardos (`client/scripts/gameplay/arena_renderer.gd`), 3 bots com mapa de perigo e BFS (`client/scripts/ai/bot_brain.gd`), HUD competitivo e todas as 13 telas navegáveis (`client/scripts/core/main.gd`).
+- **Fases 3 e 4 (Servidor Go autoritativo e Multiplayer competitivo):** Regras idênticas em Go (`server/internal/game/rules`) passando nos mesmos cenários `tests/scenarios/*.json`, codec/rate-limit/anti-replay e dispatcher WebSocket RFC 6455 do protocolo v1 (`server/internal/websocket`, `client/scripts/networking/{protocol,transport,ws_transport,net_session,net_sync}.gd`, `tests/protocol/01_envelope.json`), autenticação HMAC/convidado (`server/internal/auth`), salas públicas/privadas de 4–8 jogadores com reconexão em 30s e Elo (`server/internal/game/rooms`), persistência transacional de partidas (`server/internal/persistence/match_store.go`) e rotas REST `/v1/*` + `GET /ws` (`server/internal/httpapi/api_routes.go`).
+- **Fases 5, 6 e 7 (Cross-platform, Steam e Publicação):** Síntese procedural de efeitos sonoros PCM 16-bit com desbloqueio Web (`client/scripts/core/sfx_synth.gd`), persistência de configurações e keybinds (`client/scripts/core/settings_store.gd`), isolamento de Steamworks (`client/scripts/platform/steam_bridge.gd`, `server/internal/platform/steam.go`, `POST /v1/auth/steam`), benchmark de orçamento de CPU 20 Hz (`server/internal/game/rules/bench_test.go`), proxy reverso (`deploy/Caddyfile`), script de exportação Web (`scripts/export-web.sh`) e CI/CD (`.github/workflows/ci.yml`).
+
+Ver `docs/ROADMAP_DIARIO.md` para o registro detalhado de cada etapa e `docs/ROADMAP.md` para a visão por fases.
 
 ## Estrutura (alvo)
 

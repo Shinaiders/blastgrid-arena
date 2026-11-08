@@ -13,6 +13,10 @@ import (
 	"net/http"
 	"sync/atomic"
 	"time"
+
+	"github.com/Shinaiders/blastgrid-arena/server/internal/auth"
+	"github.com/Shinaiders/blastgrid-arena/server/internal/game/rooms"
+	"github.com/Shinaiders/blastgrid-arena/server/internal/websocket"
 )
 
 // MaxBodyBytes limita o corpo de qualquer requisição HTTP (as rotas REST da
@@ -38,12 +42,15 @@ type Options struct {
 	Version      string
 }
 
-// Server encapsula *http.Server com o estado de prontidão.
+// Server encapsula *http.Server com o estado de prontidão e serviços de domínio.
 type Server struct {
 	log      *slog.Logger
 	opts     Options
 	srv      *http.Server
 	draining atomic.Bool
+	auth     *auth.Service
+	rooms    *rooms.Manager
+	ws       *websocket.Dispatcher
 }
 
 // New cria o servidor com as rotas registradas.
@@ -51,11 +58,18 @@ func New(log *slog.Logger, opts Options) *Server {
 	if opts.ReadyTimeout <= 0 {
 		opts.ReadyTimeout = time.Second
 	}
-	s := &Server{log: log, opts: opts}
+	s := &Server{
+		log:   log,
+		opts:  opts,
+		auth:  auth.NewService("", 24*time.Hour),
+		rooms: rooms.NewManager(),
+	}
+	s.ws = websocket.NewDispatcher(s.auth, s.rooms)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("GET /readyz", s.handleReadyz)
+	s.registerAPIRoutes(mux)
 
 	s.srv = &http.Server{
 		Addr:              opts.Addr,
@@ -72,6 +86,9 @@ func New(log *slog.Logger, opts Options) *Server {
 
 // Handler expõe a pilha completa (middlewares + rotas), útil em testes.
 func (s *Server) Handler() http.Handler { return s.srv.Handler }
+
+// Dispatcher retorna o WebSocket Dispatcher configurado no servidor.
+func (s *Server) Dispatcher() *websocket.Dispatcher { return s.ws }
 
 // Serve atende em ln até Shutdown. Retorna nil no encerramento normal.
 func (s *Server) Serve(ln net.Listener) error {

@@ -1,17 +1,26 @@
 # BlastGrid Arena — Deploy
 
-Versão 1.1 (2026-11-06). Status: `server/Dockerfile`, `docker-compose.yml` e `.env.example` existem (Dia 04);
-o deploy de produção é da Fase 7. Nenhum serviço pago é dependência: as opções pagas
-aparecem marcadas e só serão adotadas com aprovação.
+Versão 1.2 (2026-11-08). Status: `server/Dockerfile`, `docker-compose.yml`, `.env.example`,
+`deploy/Caddyfile`, `.github/workflows/ci.yml` e `scripts/export-web.sh` estão implementados (Fases 1–7).
+Nenhum serviço pago é dependência: as opções pagas aparecem marcadas e só serão adotadas com aprovação.
 
 ## 1. Artefatos
 
 | Artefato | Origem | Destino |
 |---|---|---|
-| Binário `api` (Go, estático, `CGO_ENABLED=0`) | `server/cmd/api` | imagem Docker (`gcr.io/distroless/static` ou `scratch` + CA certs), usuário não-root |
+| Binário `api` (Go, estático, `CGO_ENABLED=0`) | `server/cmd/api` (`server/Dockerfile`) | imagem Docker (`gcr.io/distroless/static-debian12:nonroot`), usuário não-root |
 | Migrations | `server/migrations` embutidas no binário (`embed.FS`) | `api migrate up` |
-| Build Web | export Godot `Web` | arquivos estáticos (`index.html`, `.wasm`, `.pck`, `.js`) |
-| Builds desktop | export Godot Windows/Linux/macOS | Steam (Fase 6) / download |
+| Build Web | export Godot `Web` via `./scripts/export-web.sh` | arquivos estáticos em `client/build/web/` (`index.html`, `.wasm`, `.pck`, `.js`) |
+| Builds desktop | export Godot Windows/Linux/macOS (`client/export_presets.cfg`) | Steam (Fase 6) / download |
+| Proxy reverso TLS/WSS | `deploy/Caddyfile` | Caddy servindo `/srv/blastgrid-web` + proxy para `api:8080` |
+| Pipeline CI | `.github/workflows/ci.yml` | GitHub Actions (`backend`, `client`, `docker`) |
+
+### Exportação da build Web (`scripts/export-web.sh`)
+
+```bash
+./scripts/export-web.sh              # valida export templates e gera client/build/web/index.html
+./scripts/export-web.sh --serve 8000 # exporta e serve localmente em http://127.0.0.1:8000
+```
 
 ## 2. Configuração (variáveis de ambiente)
 
@@ -34,6 +43,7 @@ Prefixo `BG_`. Validadas na inicialização; valor inválido ⇒ o processo não
 | `BG_IDLE_TIMEOUT` | `60s` | keep-alive |
 | `BG_SHUTDOWN_TIMEOUT` | `30s` | prazo do graceful shutdown |
 | `BG_AUTH_SECRET` | — (obrigatória em prod) | chave HMAC dos access tokens (Fase 3) |
+| `BG_STEAM_WEB_API_KEY` / `BG_STEAM_APP_ID` | — (opcionais) | validação de session tickets Steam em produção (`POST /v1/auth/steam`, Fase 6) |
 
 Segredos nunca vão para o repositório: `.env` está no `.gitignore`; `.env.example` só com valores de dev.
 
@@ -63,36 +73,45 @@ No Mac: Docker Desktop (gratuito para uso pessoal/empresas pequenas — verifica
 comercial de maior porte), OrbStack (gratuito para uso pessoal) ou **Colima** (open source, sem restrição).
 Na VM de automação não há Docker (ARCHITECTURE §7): lá se validam sintaxe e testes Go sem container.
 
-## 5. Produção (Fase 7) — topologia mínima
+## 5. Produção (Fase 7) — topologia mínima (`deploy/Caddyfile`)
 
 ```
-Internet ──443──► Caddy (TLS automático Let's Encrypt, HTTP/1.1 + upgrade WS)
-                    ├── /            → arquivos da build Web (ou hospedagem estática separada)
-                    ├── /v1/*        → api:8080
-                    └── /ws          → api:8080 (WebSocket, timeouts longos)
+Internet ──443──► Caddy (deploy/Caddyfile: TLS automático Let's Encrypt, HTTP/1.1 + upgrade WS)
+                    ├── /            → arquivos da build Web (/srv/blastgrid-web)
+                    ├── /v1/*        → api:8080 (+ /healthz, /readyz)
+                    └── /ws          → api:8080 (WebSocket, flush_interval -1, timeouts 65s)
                   api (container) ──► PostgreSQL 16 (container com volume ou gerenciado)
 ```
 
-- **Proxy/TLS:** Caddy (Apache-2.0) — certificados gratuitos e renovação automática. Alternativa: nginx +
-  certbot. Ambos gratuitos.
+- **Proxy/TLS (`deploy/Caddyfile`):** Caddy (Apache-2.0) — certificados gratuitos e renovação automática,
+  headers de segurança (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+  `Referrer-Policy: strict-origin-when-cross-origin`), compressão `zstd`/`gzip`, entrega estática de
+  `/srv/blastgrid-web` (`BG_WEB_ROOT`) e reverse proxy de `/v1/*`, `/healthz`, `/readyz` e `/ws` para
+  `api:8080` (`BG_API_UPSTREAM`). Alternativa: nginx + certbot. Ambos gratuitos.
 - **Hospedagem do servidor:** uma VPS pequena (2 vCPU / 2–4 GB) é suficiente para a v1. **Tem custo
   mensal → requer aprovação.** Opções gratuitas existem (ex.: camadas "always free" de nuvens públicas),
   mas com limites e políticas que mudam; avaliar na Fase 7 com dados atuais antes de decidir.
-- **Build Web:** itch.io, GitHub Pages ou Cloudflare Pages (gratuitos). Como o export é single-thread, não
+- **Build Web (`scripts/export-web.sh`):** gerada em `client/build/web/` e publicada no `/srv/blastgrid-web`
+  do Caddy ou em itch.io, GitHub Pages ou Cloudflare Pages (gratuitos). Como o export é single-thread, não
   precisa de headers COOP/COEP. Se ficar em domínio diferente da API, incluir a origem em `BG_ALLOWED_ORIGINS`.
-- **WebSocket atrás do proxy:** timeout de leitura do proxy > intervalo de ping (2 s) com folga (ex.: 60 s);
-  sem buffering de resposta para `/ws`.
+- **WebSocket atrás do proxy:** em `deploy/Caddyfile`, `read_timeout` e `write_timeout` de `/ws` são de `65s`
+  (> intervalo de ping de 2 s com folga) e `flush_interval -1` desativa o buffering de resposta.
 
-## 6. Deploy e atualização
+## 6. Deploy e atualização (`.github/workflows/ci.yml`)
 
-1. CI (GitHub Actions, gratuito para repositório público e com cota no privado) roda `go vet`, `go test
-   -race ./...`, testes headless Godot e build da imagem.
+1. CI em `.github/workflows/ci.yml` (GitHub Actions, gratuito para repositório público e com cota no privado)
+   executa três jobs em paralelo:
+   - `backend`: Go 1.27 + container `postgres:16-alpine`, rodando `gofmt -l .`, `go vet ./...` e
+     `go test -race -v ./...` com `BG_TEST_DATABASE_URL`.
+   - `client`: baixa o binário headless do Godot `4.7.2-stable` para Linux e executa
+     `godot --headless --path client --import` e `godot --headless --path client -s res://tests/run_tests.gd`.
+   - `docker`: executa `docker build` de `server/Dockerfile` para validar a imagem de produção.
 2. Imagem marcada com o hash do commit; publicada no GitHub Container Registry (gratuito na cota).
 3. Na VPS: `docker compose pull && docker compose run --rm api migrate up && docker compose up -d`.
 4. **Drenagem:** como partidas vivem em memória, o container antigo recebe SIGTERM, para de aceitar salas
    (`/readyz` = 503) e espera as partidas terminarem até `BG_SHUTDOWN_TIMEOUT`. Para deploy sem derrubar
-   partidas, subir a nova versão em outra porta, trocar o upstream do Caddy e só então parar a antiga
-   (blue/green manual na v1). Ajustar `stop_grace_period` do compose ≥ `BG_SHUTDOWN_TIMEOUT`.
+   partidas, subir a nova versão em outra porta, trocar o upstream do Caddy (`BG_API_UPSTREAM`) e só então
+   parar a antiga (blue/green manual na v1). Ajustar `stop_grace_period` do compose ≥ `BG_SHUTDOWN_TIMEOUT`.
 5. Migrations devem ser compatíveis com a versão anterior do binário (expandir → migrar → contrair).
 
 ## 7. Observabilidade

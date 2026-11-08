@@ -100,7 +100,7 @@ func TestMigrateUpDownUp(t *testing.T) {
 		t.Fatal("Up não aplicou nada num banco vazio")
 	}
 	want := []string{"users", "user_profiles", "characters", "skins", "matches", "match_players",
-		"rankings", "player_statistics", "achievements", "player_achievements", "player_inventory"}
+		"rankings", "player_statistics", "achievements", "player_achievements", "player_inventory", "auth_sessions"}
 	for _, tbl := range want {
 		var ok bool
 		if err := pool.QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, tbl).Scan(&ok); err != nil || !ok {

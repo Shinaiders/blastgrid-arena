@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Ícone original do BlastGrid Arena: arena quadriculada com uma bomba estilizada. -->
+  <rect x="4" y="4" width="120" height="120" rx="22" fill="#1b2140"/>
+  <g fill="#2c3566">
+    <rect x="16" y="16" width="28" height="28" rx="5"/><rect x="50" y="16" width="28" height="28" rx="5"/>
+    <rect x="84" y="16" width="28" height="28" rx="5"/><rect x="16" y="50" width="28" height="28" rx="5"/>
+    <rect x="84" y="50" width="28" height="28" rx="5"/><rect x="16" y="84" width="28" height="28" rx="5"/>
+    <rect x="50" y="84" width="28" height="28" rx="5"/><rect x="84" y="84" width="28" height="28" rx="5"/>
+  </g>
+  <circle cx="64" cy="70" r="26" fill="#ff5a3c"/>
+  <circle cx="55" cy="61" r="7" fill="#ffd0c4"/>
+  <path d="M64 44 C64 34 72 30 80 30" stroke="#f4e7c8" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <circle cx="84" cy="28" r="7" fill="#ffd23f"/>
+</svg>

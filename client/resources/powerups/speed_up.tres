@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="PowerUpDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/rules/powerup_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = "speed_up"
+display_name = "Turbina"
+description = "+0,5 tile/s de velocidade (máx. 7,0)"
+drop_weight = 20
+add_range = 0
+add_bombs = 0
+add_speed = 25
+shield_ticks = 0
+color = Color(0.35, 0.95, 0.45, 1)
+

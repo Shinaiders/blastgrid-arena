@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "description": "Conformidade de colocacao de bombas, anti-prisao, reacao em cadeia FIFO, destruicao de blocos e eliminacao",
+  "cases": [
+    {
+      "name": "chain_reaction_and_block_stop",
+      "seed": 1,
+      "clear_cells": [[1, 1], [2, 1], [3, 1], [4, 1], [5, 1], [1, 2], [1, 3]],
+      "block_cells": [[5, 1]],
+      "bomb_a": {"owner": "p0", "cx": 1, "cy": 1, "fuse": 5, "range": 2},
+      "bomb_b": {"owner": "p1", "cx": 3, "cy": 1, "fuse": 40, "range": 2},
+      "ticks_to_run": 5,
+      "expect_detonated_order": [1, 2],
+      "expect_cell_5_1_tile": 0
+    }
+  ]
+}
+

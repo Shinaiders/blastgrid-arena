@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "description": "Fixtures de conformidade do envelope do protocolo v1 (NETWORK_PROTOCOL.md §2, §9, §13)",
+  "valid_messages": [
+    {
+      "raw": "{\"v\":1,\"t\":\"hello\",\"seq\":1,\"data\":{\"token\":\"tok_123\",\"client\":{\"platform\":\"web\",\"version\":\"0.1.0\"}}}",
+      "expect_t": "hello",
+      "expect_seq": 1,
+      "expect_ack": 0
+    },
+    {
+      "raw": "{\"v\":1,\"t\":\"input\",\"seq\":42,\"ack\":1337,\"data\":{\"dir\":\"up\",\"bomb\":false,\"tick\":2051}}",
+      "expect_t": "input",
+      "expect_seq": 42,
+      "expect_ack": 1337
+    }
+  ],
+  "invalid_messages": [
+    {
+      "raw": "not-json",
+      "expect_code": "bad_message"
+    },
+    {
+      "raw": "{\"v\":2,\"t\":\"hello\",\"seq\":1,\"data\":{}}",
+      "expect_code": "unsupported_version"
+    },
+    {
+      "raw": "{\"v\":1,\"t\":\"\",\"seq\":1,\"data\":{}}",
+      "expect_code": "bad_message"
+    },
+    {
+      "raw": "{\"v\":1,\"t\":\"input\",\"seq\":0,\"data\":{}}",
+      "expect_code": "bad_message"
+    }
+  ]
+}
+

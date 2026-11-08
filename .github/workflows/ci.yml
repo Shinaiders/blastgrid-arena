@@ -1,0 +1,97 @@
+# BlastGrid Arena — Pipeline de Integração Contínua (docs/DEPLOYMENT.md §6).
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Go Backend (fmt, vet, test -race)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: blastgrid
+          POSTGRES_PASSWORD: blastgrid_test
+          POSTGRES_DB: blastgrid_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U blastgrid -d blastgrid_test"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go 1.27
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache-dependency-path: server/go.sum
+
+      - name: Check formatting (gofmt)
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Arquivos fora do padrão gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run go test with race detector
+        env:
+          BG_TEST_DATABASE_URL: postgres://blastgrid:blastgrid_test@localhost:5432/blastgrid_test?sslmode=disable
+        run: go test -race -v ./...
+
+  client:
+    name: Godot 4.7.2 Headless Tests
+    runs-on: ubuntu-latest
+    env:
+      GODOT_VERSION: "4.7.2-stable"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Godot 4.7.2 headless
+        run: |
+          curl -fsSL -o /tmp/godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d /tmp
+          sudo mv "/tmp/Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+          godot --version
+
+      - name: Import project resources
+        run: godot --headless --path client --import
+
+      - name: Run GDScript test suite
+        run: godot --headless --path client -s res://tests/run_tests.gd
+
+  docker:
+    name: Build Production Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build server/Dockerfile
+        run: |
+          docker build \
+            --build-arg VERSION="${{ github.sha }}" \
+            -t blastgrid/api:"${{ github.sha }}" \
+            ./server

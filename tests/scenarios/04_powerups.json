@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "description": "Conformidade de power-ups (range_up, bomb_up, speed_up, shield) e protecao de escudo contra explosao",
+  "cases": [
+    {
+      "name": "shield_absorbs_explosion_and_survives_flame",
+      "seed": 1,
+      "player_cell": [1, 1],
+      "shield_kind": "shield",
+      "bomb_fuse": 5,
+      "ticks_after_explosion": 12,
+      "expect_alive": true,
+      "expect_shield_ticks": 0
+    }
+  ]
+}
+

@@ -14,6 +14,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Shinaiders/blastgrid-arena/server/internal/platform"
 )
 
 func testLogger(w io.Writer) *slog.Logger {
@@ -215,5 +217,121 @@ func TestGracefulShutdown(t *testing.T) {
 	}
 	if err := <-serveErr; err != nil {
 		t.Fatalf("Serve: %v", err)
+	}
+}
+
+func TestV1AuthRoomsMatchmakingAndRankings(t *testing.T) {
+	s := New(testLogger(io.Discard), Options{Version: "test"})
+	h := s.Handler()
+
+	// 1. Login de convidado
+	reqGuest := httptest.NewRequest("POST", "/v1/auth/guest", strings.NewReader(`{"display_name":"VoltHero"}`))
+	recGuest := httptest.NewRecorder()
+	h.ServeHTTP(recGuest, reqGuest)
+	if recGuest.Code != http.StatusOK {
+		t.Fatalf("guest login: %d %s", recGuest.Code, recGuest.Body.String())
+	}
+	var guestResp map[string]any
+	_ = json.Unmarshal(recGuest.Body.Bytes(), &guestResp)
+	tok, _ := guestResp["access_token"].(string)
+	if tok == "" {
+		t.Fatal("access_token vazio")
+	}
+
+	authHdr := map[string]string{"Authorization": "Bearer " + tok}
+
+	// 2. Perfil autenticado
+	recProf, bodyProf := do(t, h, "GET", "/v1/profile", authHdr)
+	if recProf.Code != http.StatusOK || bodyProf["profile"] == nil {
+		t.Fatalf("profile: %d %v", recProf.Code, bodyProf)
+	}
+
+	// 3. Matchmaking cria/entra em sala pública
+	reqMM := httptest.NewRequest("POST", "/v1/matchmaking/enqueue", strings.NewReader(`{"mode":"ffa","max_players":4,"platform":"web"}`))
+	reqMM.Header.Set("Authorization", "Bearer "+tok)
+	recMM := httptest.NewRecorder()
+	h.ServeHTTP(recMM, reqMM)
+	if recMM.Code != http.StatusOK {
+		t.Fatalf("matchmaking: %d %s", recMM.Code, recMM.Body.String())
+	}
+
+	// 4. Listagem de salas e ranking
+	recRooms, _ := do(t, h, "GET", "/v1/rooms", nil)
+	if recRooms.Code != http.StatusOK {
+		t.Fatalf("rooms: %d", recRooms.Code)
+	}
+	recRank, _ := do(t, h, "GET", "/v1/rankings", nil)
+	if recRank.Code != http.StatusOK {
+		t.Fatalf("rankings: %d", recRank.Code)
+	}
+}
+
+func TestAuthAndRoomsEndpoints(t *testing.T) {
+	TestV1AuthRoomsMatchmakingAndRankings(t)
+}
+
+func TestSteamAuthEndpoint(t *testing.T) {
+	s := New(testLogger(io.Discard), Options{Version: "test"})
+	h := s.Handler()
+
+	if s.Dispatcher() == nil {
+		t.Fatal("s.Dispatcher() não deve ser nil")
+	}
+
+	const steamID uint64 = 76561198000000001
+	validTicket := platform.BuildMockTicket(steamID, 480)
+
+	// 1. Ticket válido
+	validBody := map[string]any{
+		"ticket":       validTicket,
+		"app_id":       480,
+		"display_name": "SteamVolt",
+	}
+	rawValid, _ := json.Marshal(validBody)
+	reqValid := httptest.NewRequest("POST", "/v1/auth/steam", bytes.NewReader(rawValid))
+	recValid := httptest.NewRecorder()
+	h.ServeHTTP(recValid, reqValid)
+
+	if recValid.Code != http.StatusOK {
+		t.Fatalf("auth steam válido: esperado 200, veio %d %s", recValid.Code, recValid.Body.String())
+	}
+	var respValid struct {
+		AccessToken string         `json:"access_token"`
+		SteamID     uint64         `json:"steam_id"`
+		User        map[string]any `json:"user"`
+	}
+	if err := json.Unmarshal(recValid.Body.Bytes(), &respValid); err != nil {
+		t.Fatalf("json inválido: %v", err)
+	}
+	if respValid.AccessToken == "" {
+		t.Fatal("access_token não veio na resposta")
+	}
+	if respValid.SteamID != steamID {
+		t.Fatalf("steam_id esperado %d, veio %d", steamID, respValid.SteamID)
+	}
+	if respValid.User == nil {
+		t.Fatal("user não veio na resposta")
+	}
+
+	// 2. Ticket inválido -> 401 Unauthorized
+	invalidBody := map[string]any{
+		"ticket": "invalid_ticket_hex_123",
+		"app_id": 480,
+	}
+	rawInvalid, _ := json.Marshal(invalidBody)
+	reqInvalid := httptest.NewRequest("POST", "/v1/auth/steam", bytes.NewReader(rawInvalid))
+	recInvalid := httptest.NewRecorder()
+	h.ServeHTTP(recInvalid, reqInvalid)
+
+	if recInvalid.Code != http.StatusUnauthorized {
+		t.Fatalf("auth steam inválido: esperado 401, veio %d %s", recInvalid.Code, recInvalid.Body.String())
+	}
+
+	// 3. GET /ws sem cabeçalhos de WebSocket upgrade -> 400 Bad Request
+	reqWS := httptest.NewRequest("GET", "/ws", nil)
+	recWS := httptest.NewRecorder()
+	h.ServeHTTP(recWS, reqWS)
+	if recWS.Code != http.StatusBadRequest {
+		t.Fatalf("GET /ws sem upgrade esperado 400, veio %d %s", recWS.Code, recWS.Body.String())
 	}
 }

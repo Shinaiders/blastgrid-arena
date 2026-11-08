@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "description": "Conformidade de movimentacao em militiles, colisao com WALL/BLOCK e corner sliding (40% = 400 mt)",
+  "cases": [
+    {
+      "name": "corridor_right_and_wall_stop",
+      "seed": 1,
+      "clear_cells": [[1, 1], [2, 1], [3, 1]],
+      "block_cells": [[4, 1]],
+      "start_x": 1500,
+      "start_y": 1500,
+      "speed": 200,
+      "steps": [
+        {"dir": "right", "ticks": 5, "expect_x": 2500, "expect_y": 1500},
+        {"dir": "right", "ticks": 5, "expect_x": 3500, "expect_y": 1500},
+        {"dir": "right", "ticks": 5, "expect_x": 3500, "expect_y": 1500},
+        {"dir": "left",  "ticks": 12, "expect_x": 1500, "expect_y": 1500}
+      ]
+    },
+    {
+      "name": "corner_slide_inside_cell_350mt",
+      "seed": 1,
+      "clear_cells": [[1, 1], [2, 1], [1, 2]],
+      "block_cells": [],
+      "start_x": 1500,
+      "start_y": 1850,
+      "speed": 200,
+      "steps": [
+        {"dir": "right", "ticks": 1, "expect_x": 1500, "expect_y": 1650},
+        {"dir": "right", "ticks": 1, "expect_x": 1550, "expect_y": 1500},
+        {"dir": "right", "ticks": 4, "expect_x": 2350, "expect_y": 1500}
+      ]
+    },
+    {
+      "name": "corner_slide_around_pillar_within_400mt",
+      "seed": 1,
+      "clear_cells": [[1, 1], [2, 1], [1, 2]],
+      "block_cells": [],
+      "start_x": 1500,
+      "start_y": 2250,
+      "speed": 200,
+      "steps": [
+        {"dir": "right", "ticks": 1, "expect_x": 1500, "expect_y": 2050},
+        {"dir": "right", "ticks": 3, "expect_x": 1550, "expect_y": 1500}
+      ]
+    },
+    {
+      "name": "no_corner_slide_against_pillar_over_400mt",
+      "seed": 1,
+      "clear_cells": [[1, 1], [2, 1], [1, 2], [1, 3], [2, 3]],
+      "block_cells": [],
+      "start_x": 1500,
+      "start_y": 2450,
+      "speed": 200,
+      "steps": [
+        {"dir": "right", "ticks": 5, "expect_x": 1500, "expect_y": 2450}
+      ]
+    }
+  ]
+}
+

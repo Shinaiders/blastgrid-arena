@@ -1,0 +1,57 @@
+# BlastGrid Arena — Configuração de produção do Caddy (docs/DEPLOYMENT.md §5).
+#
+# Variáveis esperadas no ambiente do processo Caddy:
+#   BG_DOMAIN        — domínio público (ex.: play.blastgrid.example.com). Para
+#                      teste local sem TLS externo, use ":80" ou "localhost".
+#   BG_API_UPSTREAM  — endereço interno do container da API (padrão: api:8080).
+#   BG_WEB_ROOT      — diretório com os artefatos da build Web do Godot
+#                      (padrão: /srv/blastgrid-web).
+
+{$BG_DOMAIN:localhost} {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# WebSocket (/ws): upgrade HTTP/1.1 sem buffering de resposta e com timeouts
+	# maiores que o intervalo de ping (2s) com folga (docs/DEPLOYMENT.md §5).
+	@ws {
+		path /ws
+	}
+	handle @ws {
+		reverse_proxy {$BG_API_UPSTREAM:api:8080} {
+			flush_interval -1
+			transport http {
+				read_timeout 65s
+				write_timeout 65s
+				dial_timeout 5s
+			}
+		}
+	}
+
+	# Rotas HTTP da API (/v1/*, /healthz, /readyz).
+	@api {
+		path /v1/* /healthz /readyz
+	}
+	handle @api {
+		reverse_proxy {$BG_API_UPSTREAM:api:8080} {
+			header_up X-Real-IP {remote_host}
+			transport http {
+				read_timeout 15s
+				write_timeout 15s
+				dial_timeout 5s
+			}
+		}
+	}
+
+	# Arquivos estáticos da build Web do Godot (single-thread, sem necessidade de COOP/COEP).
+	handle {
+		root * {$BG_WEB_ROOT:/srv/blastgrid-web}
+		try_files {path} /index.html
+		file_server
+	}
+}
