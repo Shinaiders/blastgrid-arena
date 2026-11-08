@@ -7,8 +7,34 @@ const ArenaScene = preload("res://scenes/arena/arena.tscn")
 
 func run() -> void:
 	_test_hud_formatter()
+	_test_ranked_and_account_store()
 	_test_arena_match_controller_flow()
 	_test_all_menus_and_screens()
+
+
+func _test_ranked_and_account_store() -> void:
+	eq(str(RankedSystem.get_tier_info(950)["league"]), "Bronze", "950 MMR = Bronze")
+	eq(str(RankedSystem.get_tier_info(1180)["league"]), "Prata", "1180 MMR = Prata")
+	eq(str(RankedSystem.get_tier_info(1380)["league"]), "Ouro", "1380 MMR = Ouro")
+	eq(str(RankedSystem.get_tier_info(1600)["league"]), "Platina", "1600 MMR = Platina")
+	eq(str(RankedSystem.get_tier_info(1850)["league"]), "Diamante", "1850 MMR = Diamante")
+
+	var tmp_acc := "user://test_acc_ranked.cfg"
+	if FileAccess.file_exists(tmp_acc):
+		DirAccess.remove_absolute(tmp_acc)
+	var store := AccountStore.new(tmp_acc)
+	var reg := store.register_account("Lucas", "lucas@blastgrid.com", "123456", "sparky_b")
+	check(bool(reg.get("ok", false)), "cadastro de conta válido")
+	eq(store.account_kind, "registered", "tipo registered")
+	eq(store.display_name, "Lucas", "nome persistido")
+
+	var store_reload := AccountStore.new(tmp_acc)
+	var log_ok := store_reload.login_account("lucas@blastgrid.com", "123456")
+	check(bool(log_ok.get("ok", false)), "login com email e senha funciona")
+	var rec := store_reload.record_match_result(true, 1, 8, 3, 12)
+	check(int(rec.get("delta", 0)) > 0, "vitória ranqueada de 8 jogadores sobe MMR")
+	if FileAccess.file_exists(tmp_acc):
+		DirAccess.remove_absolute(tmp_acc)
 
 
 func _test_hud_formatter() -> void:
@@ -34,6 +60,8 @@ func _test_arena_match_controller_flow() -> void:
 	var arena: ArenaMatchController = ArenaScene.instantiate()
 	arena._build_ui()
 	arena.start_local_match("practice", 99, "medium")
+	check(arena.sfx_synth != null, "SfxSynth instanciado no ArenaMatchController")
+	eq(arena._sfx_players.size(), 4, "pool de 4 AudioStreamPlayers criado")
 	eq(arena.sim.players.size(), 4, "1 jogador + 3 bots na partida")
 	eq(arena.bots.size(), 3, "3 cérebros de bot ativos")
 	check(not arena.is_paused, "inicia despausado")
@@ -46,6 +74,13 @@ func _test_arena_match_controller_flow() -> void:
 	for _t in range(40):
 		arena._advance_one_tick()
 	eq(arena.sim.tick, 40, "avançou 40 ticks com HUD e bots")
+
+	# Testa modo Ranqueado de 8 jogadores no Mapa Grande (19x15)
+	arena.start_local_match("ranked_8p", 777, "medium", 8, true)
+	eq(arena.sim.players.size(), 8, "8 jogadores na Mega Arena")
+	eq(arena.sim.grid.cols, 19, "mapa grande tem 19 colunas")
+	eq(arena.sim.grid.rows, 15, "mapa grande tem 15 linhas")
+	eq(arena.bots.size(), 7, "7 bots ativos no modo de 8 jogadores")
 	arena.free()
 
 

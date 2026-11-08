@@ -43,15 +43,19 @@ var winner_id: String = ""
 var practice_mode: bool = false
 
 
-func _init(p_seed: int = 1, player_ids: Array[String] = ["p0", "p1", "p2", "p3"], is_practice: bool = false) -> void:
+func _init(p_seed: int = 1, player_ids: Array[String] = ["p0", "p1", "p2", "p3"], is_practice: bool = false, use_large_map: bool = false) -> void:
 	seed_value = p_seed
 	practice_mode = is_practice
-	grid = Grid.generate(seed_value, player_ids.size())
+	if use_large_map:
+		grid = Grid.generate(seed_value, player_ids.size(), Grid.LARGE_COLS, Grid.LARGE_ROWS)
+	else:
+		grid = Grid.generate(seed_value, player_ids.size())
 	# O PRNG de drops continua a partir de uma derivada determinística do seed da partida
 	rng = PRNG.new((seed_value ^ 0x9E3779B9) & 0xFFFFFFFF)
 
+	var spawns := Grid.get_spawns_for_size(grid.cols, grid.rows)
 	for i in range(player_ids.size()):
-		var spawn := Grid.SPAWNS[i % Grid.SPAWNS.size()]
+		var spawn := spawns[i % spawns.size()]
 		var p := PlayerState.new(player_ids[i], i, spawn)
 		var char_idx := i % 4
 		var suffix: String = ["a", "b", "c", "d"][char_idx]

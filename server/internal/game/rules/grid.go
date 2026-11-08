@@ -5,6 +5,8 @@ import "strings"
 const (
 	DefaultCols = 15
 	DefaultRows = 13
+	LargeCols   = 19
+	LargeRows   = 15
 )
 
 // Tile representa o tipo de célula do grid (GDD §3).
@@ -62,9 +64,43 @@ func NewGrid(c, r int) *Grid {
 	}
 }
 
-// GenerateGrid gera um mapa determinístico a partir de seed e spawnCount (4 ou 8).
-func GenerateGrid(seed uint32, spawnCount int) *Grid {
-	g := NewGrid(DefaultCols, DefaultRows)
+// GetSpawnsForSize retorna as posições de spawn para as dimensões c×r.
+func GetSpawnsForSize(c, r int) []CellCoord {
+	if c == DefaultCols && r == DefaultRows {
+		return Spawns
+	}
+	return []CellCoord{
+		{1, 1},
+		{c - 2, 1},
+		{1, r - 2},
+		{c - 2, r - 2},
+		{c / 2, 1},
+		{c / 2, r - 2},
+		{1, r / 2},
+		{c - 2, r / 2},
+	}
+}
+
+// GetSafeZonesForSize retorna as zonas seguras em L para as dimensões c×r.
+func GetSafeZonesForSize(c, r int) [][]CellCoord {
+	if c == DefaultCols && r == DefaultRows {
+		return SpawnSafeZones
+	}
+	return [][]CellCoord{
+		{{1, 1}, {2, 1}, {1, 2}},
+		{{c - 2, 1}, {c - 3, 1}, {c - 2, 2}},
+		{{1, r - 2}, {2, r - 2}, {1, r - 3}},
+		{{c - 2, r - 2}, {c - 3, r - 2}, {c - 2, r - 3}},
+		{{c / 2, 1}, {c/2 - 1, 1}, {c / 2, 2}},
+		{{c / 2, r - 2}, {c/2 + 1, r - 2}, {c / 2, r - 3}},
+		{{1, r / 2}, {2, r / 2}, {1, r/2 - 1}},
+		{{c - 2, r / 2}, {c - 3, r / 2}, {c - 2, r/2 + 1}},
+	}
+}
+
+// GenerateGridWithSize gera um mapa determinístico com dimensões customizadas.
+func GenerateGridWithSize(seed uint32, spawnCount, c, r int) *Grid {
+	g := NewGrid(c, r)
 	rng := NewPRNG(seed)
 	densityPct := 55 + int(rng.NextBound(16)) // 55..70 inclusive
 
@@ -72,9 +108,10 @@ func GenerateGrid(seed uint32, spawnCount int) *Grid {
 	if spawnCount > 4 {
 		activeSpawns = 8
 	}
+	safeZones := GetSafeZonesForSize(c, r)
 	safeMap := make(map[int]bool, activeSpawns*3)
-	for s := 0; s < activeSpawns && s < len(SpawnSafeZones); s++ {
-		for _, pt := range SpawnSafeZones[s] {
+	for s := 0; s < activeSpawns && s < len(safeZones); s++ {
+		for _, pt := range safeZones[s] {
 			safeMap[pt.Y*g.Cols+pt.X] = true
 		}
 	}
@@ -107,6 +144,11 @@ func GenerateGrid(seed uint32, spawnCount int) *Grid {
 		g.Cells[candidates[i]] = TileBlock
 	}
 	return g
+}
+
+// GenerateGrid gera um mapa determinístico a partir de seed e spawnCount (4 ou 8).
+func GenerateGrid(seed uint32, spawnCount int) *Grid {
+	return GenerateGridWithSize(seed, spawnCount, DefaultCols, DefaultRows)
 }
 
 // CompactString serializa o grid em 195 dígitos ('0', '1', '2').

@@ -5,6 +5,8 @@ extends RefCounted
 
 const DEFAULT_COLS: int = 15
 const DEFAULT_ROWS: int = 13
+const LARGE_COLS: int = 19
+const LARGE_ROWS: int = 15
 
 enum Tile {
 	EMPTY = 0,
@@ -41,6 +43,38 @@ var rows: int = DEFAULT_ROWS
 var cells: PackedInt32Array = PackedInt32Array()
 
 
+static func get_spawns_for_size(c: int = DEFAULT_COLS, r: int = DEFAULT_ROWS) -> Array[Vector2i]:
+	if c == DEFAULT_COLS and r == DEFAULT_ROWS:
+		return SPAWNS
+
+	return [
+		Vector2i(1, 1),
+		Vector2i(c - 2, 1),
+		Vector2i(1, r - 2),
+		Vector2i(c - 2, r - 2),
+		Vector2i(c / 2, 1),
+		Vector2i(c / 2, r - 2),
+		Vector2i(1, r / 2),
+		Vector2i(c - 2, r / 2),
+	]
+
+
+static func get_safe_zones_for_size(c: int = DEFAULT_COLS, r: int = DEFAULT_ROWS) -> Array:
+	if c == DEFAULT_COLS and r == DEFAULT_ROWS:
+		return SPAWN_SAFE_ZONES
+
+	return [
+		[Vector2i(1, 1), Vector2i(2, 1), Vector2i(1, 2)],
+		[Vector2i(c - 2, 1), Vector2i(c - 3, 1), Vector2i(c - 2, 2)],
+		[Vector2i(1, r - 2), Vector2i(2, r - 2), Vector2i(1, r - 3)],
+		[Vector2i(c - 2, r - 2), Vector2i(c - 3, r - 2), Vector2i(c - 2, r - 3)],
+		[Vector2i(c / 2, 1), Vector2i(c / 2 - 1, 1), Vector2i(c / 2, 2)],
+		[Vector2i(c / 2, r - 2), Vector2i(c / 2 + 1, r - 2), Vector2i(c / 2, r - 3)],
+		[Vector2i(1, r / 2), Vector2i(2, r / 2), Vector2i(1, r / 2 - 1)],
+		[Vector2i(c - 2, r / 2), Vector2i(c - 3, r / 2), Vector2i(c - 2, r / 2 + 1)],
+	]
+
+
 func _init(c: int = DEFAULT_COLS, r: int = DEFAULT_ROWS) -> void:
 	cols = c
 	rows = r
@@ -55,8 +89,9 @@ static func generate(seed_value: int, spawn_count: int = 4, c: int = DEFAULT_COL
 
 	var active_spawns := 4 if spawn_count <= 4 else 8
 	var safe_map := {}
-	for s in range( mini(active_spawns, SPAWN_SAFE_ZONES.size()) ):
-		for pt: Vector2i in SPAWN_SAFE_ZONES[s]:
+	var zones := get_safe_zones_for_size(c, r)
+	for s in range( mini(active_spawns, zones.size()) ):
+		for pt: Vector2i in zones[s]:
 			safe_map[pt.y * c + pt.x] = true
 
 	var candidates: Array[int] = []

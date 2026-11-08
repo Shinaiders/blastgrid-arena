@@ -21,11 +21,21 @@ func _test_arena_renderer_danger_and_visuals() -> void:
 
 	var renderer := ArenaRenderer.new()
 	renderer.bind_sim(sim)
+	check(renderer.player_anim.has("p0"), "player_anim inicializado para p0")
 	renderer.snapshot_positions_before_tick()
 	var evs := sim.step_tick()
 	renderer.on_tick_events(evs)
 	renderer.step_visuals(0.05, 0.5)
 	eq(ArenaRenderer.PLAYER_COLORS.size(), 8, "8 cores distintas para até 8 jogadores")
+
+	# Testa screen shake e partículas sob explosão
+	renderer.on_tick_events([{"k": "explosion", "cells": [[1, 1]]}])
+	check(renderer.shake_trauma >= 0.5, "screen shake trauma ativado na explosão")
+	check(renderer.particles.size() > 0, "partículas geradas na explosão")
+	renderer.step_visuals(0.05, 0.5)
+	check(renderer.player_anim["p0"].has("walk_phase"), "walk_phase rastreado no jogador")
+	check(renderer.player_anim["p0"].has("move_blend"), "move_blend rastreado no jogador")
+	check(renderer.player_anim["p0"].has("ant_offset"), "ant_offset com mola rastreado")
 	renderer.free()
 
 
